@@ -6,7 +6,7 @@
 
 ```bash
 # 環境起動
-docker-compose up -d
+docker compose up -d
 
 # DB マイグレーション
 ./gradlew :study-all:flywayMigrate
@@ -27,18 +27,34 @@ learning-management-app/
 │   └── study-analytics/     # 学習分析ドメイン
 ```
 
+### Module Responsibilities
+
+- **study-all**: API endpoints, Application startup, DB migration
+- **study-base**: Common entities (User, StudyCategory), CQRS infrastructure, Value objects
+- **study-plan**: Study plan management, Goal setting
+- **study-session**: Study session recording, Progress tracking
+- **study-analytics**: Statistics calculation, Report generation
+
 **CQRS + マルチモジュール構成**
-- Command/Query責務分離
+
+- Command/Query 責務分離
 - ドメイン毎のモジュール分割
-- MyBatis Dynamic SQLによるデータアクセス
+- MyBatis Dynamic SQL によるデータアクセス
+
+**モジュール責務:**
+- `study-all`: アプリ起動・API公開・DB設定
+- `study-base`: 共通Entity・Repository基盤・CQRS基盤
+- `study-plan`: 学習計画・目標管理
+- `study-session`: 学習実績記録・セッション管理
+- `study-analytics`: 進捗分析・統計・レポート
 
 ## Progress
 
-✅ study-base: 基盤クラス・共通エンティティ・テーブル設計  
-🚧 study-plan: 学習計画ドメイン（次回実装）  
-⏳ study-session: 学習セッションドメイン  
-⏳ study-analytics: 学習分析ドメイン  
-⏳ study-all: API層
+✅ study-base: 基盤クラス・共通エンティティ・テーブル設計
+🚧 study-plan: 学習計画ドメイン（次回実装）
+⏳ study-session: 学習セッションドメイン
+⏳ study-analytics: 学習分析ドメイン
+⏳ study-all: API 層
 
 ### Database Schema
 
