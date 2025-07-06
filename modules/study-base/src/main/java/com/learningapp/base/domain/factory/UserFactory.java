@@ -8,8 +8,7 @@ import java.util.Objects;
 
 /**
  * Userエンティティのファクトリクラス
- * Effective Java Item 1: staticファクトリーメソッドの代替
- * GoF Factory Pattern
+ * Package-privateコンストラクタを直接呼び出し
  */
 @Component
 public class UserFactory {
@@ -20,7 +19,7 @@ public class UserFactory {
     public User createNewUser(final String name, final String email) {
         validateCreationInputs(name, email);
         
-        return User.create(name, email);
+        return new User(UserId.generate(), name, email);  // 直接new
     }
     
     /**
@@ -29,7 +28,7 @@ public class UserFactory {
     public User restoreUser(final UserId id, final String name, final String email) {
         validateRestorationInputs(id, name, email);
         
-        return User.restore(id, name, email);
+        return new User(id, name, email);  // 直接new
     }
     
     /**
@@ -46,7 +45,7 @@ public class UserFactory {
     public User createAdminUser(final String name, final String email) {
         validateAdminCreationInputs(name, email);
         
-        return User.create(name, email);
+        return new User(UserId.generate(), name, email);  // 直接new
     }
     
     private void validateCreationInputs(final String name, final String email) {

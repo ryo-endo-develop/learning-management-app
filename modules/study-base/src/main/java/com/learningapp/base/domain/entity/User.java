@@ -1,6 +1,7 @@
 package com.learningapp.base.domain.entity;
 
 import com.learningapp.base.domain.valueobject.UserId;
+import lombok.Getter;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -11,10 +12,8 @@ import java.util.regex.Pattern;
  * ユーザーエンティティ
  * Effective Java Item 18: 継承よりもコンポジション
  * Effective Java Item 17: 可変性を最小限に抑える
- * Effective Java Item 55: Optionalを適切に使用する
- * 
- * staticファクトリーメソッドを削除し、UserFactoryクラスで生成を担当
  */
+@Getter
 public final class User implements EntityMarker<UserId> {
     
     private static final Pattern EMAIL_PATTERN = 
@@ -24,25 +23,11 @@ public final class User implements EntityMarker<UserId> {
     private final String name;
     private final String email;
     
-    // パッケージプライベート：Factoryからのみアクセス可能
+    // Package-private：Factoryからのみアクセス可能
     User(final UserId id, final String name, final String email) {
         this.entityBase = new EntityBase<>(id);
         this.name = validateAndGetName(name);
         this.email = validateAndGetEmail(email);
-    }
-    
-    /**
-     * 新規ユーザー作成（Factoryから呼び出し用）
-     */
-    static User create(final String name, final String email) {
-        return new User(UserId.generate(), name, email);
-    }
-    
-    /**
-     * 既存ユーザー復元（Factoryから呼び出し用）
-     */
-    static User restore(final UserId id, final String name, final String email) {
-        return new User(id, name, email);
     }
     
     /**
@@ -52,15 +37,6 @@ public final class User implements EntityMarker<UserId> {
         final User updatedUser = new User(this.getId(), newName, newEmail);
         updatedUser.entityBase.updateTimestamp();
         return updatedUser;
-    }
-    
-    // Getters
-    public String getName() {
-        return name;
-    }
-    
-    public String getEmail() {
-        return email;
     }
     
     // EntityMarkerの実装
@@ -81,7 +57,6 @@ public final class User implements EntityMarker<UserId> {
     
     /**
      * 業務ロジック: メールドメインの取得
-     * Optional で安全に返す
      */
     public Optional<String> getEmailDomain() {
         final int atIndex = email.indexOf('@');

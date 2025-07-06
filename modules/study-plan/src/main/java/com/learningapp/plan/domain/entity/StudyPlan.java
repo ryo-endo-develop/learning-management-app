@@ -5,6 +5,7 @@ import com.learningapp.base.domain.entity.EntityBase;
 import com.learningapp.base.domain.enums.StudyPlanStatus;
 import com.learningapp.base.domain.valueobject.StudyPlanId;
 import com.learningapp.base.domain.valueobject.UserId;
+import lombok.Getter;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -14,9 +15,8 @@ import java.util.Optional;
 /**
  * 学習計画エンティティ
  * 集約ルート
- * Effective Java Item 17,18: 不変性とコンポジション
- * Effective Java Item 55: Optionalを適切に使用
  */
+@Getter
 public final class StudyPlan implements AggregateRootMarker<StudyPlanId> {
     
     private static final int MAX_TITLE_LENGTH = 200;
@@ -33,9 +33,10 @@ public final class StudyPlan implements AggregateRootMarker<StudyPlanId> {
     private final StudyPlanStatus status;
     private final int targetHoursPerDay;
     
-    private StudyPlan(final StudyPlanId id, final UserId userId, final String title, 
-                     final String description, final LocalDate startDate, final LocalDate endDate, 
-                     final StudyPlanStatus status, final int targetHoursPerDay) {
+    // Package-private：Factoryからのみアクセス可能
+    StudyPlan(final StudyPlanId id, final UserId userId, final String title, 
+             final String description, final LocalDate startDate, final LocalDate endDate, 
+             final StudyPlanStatus status, final int targetHoursPerDay) {
         this.entityBase = new EntityBase<>(id);
         this.userId = Objects.requireNonNull(userId, "User ID must not be null");
         this.title = validateAndGetTitle(title);
@@ -46,34 +47,6 @@ public final class StudyPlan implements AggregateRootMarker<StudyPlanId> {
         this.targetHoursPerDay = targetHoursPerDay;
         
         validateDateRange(startDate, endDate);
-    }
-    
-    /**
-     * 新規学習計画作成
-     * targetHoursPerDay が null の場合はデフォルト値を使用
-     */
-    public static StudyPlan create(final UserId userId, final String title, final String description,
-                                   final LocalDate startDate, final LocalDate endDate, 
-                                   final Integer targetHoursPerDay) {
-        final int validatedTargetHours = Optional.ofNullable(targetHoursPerDay)
-            .map(StudyPlan::validateAndGetTargetHours)
-            .orElse(DEFAULT_TARGET_HOURS);
-            
-        return new StudyPlan(StudyPlanId.generate(), userId, title, description, 
-                           startDate, endDate, StudyPlanStatus.ACTIVE, validatedTargetHours);
-    }
-    
-    /**
-     * 既存学習計画復元（永続化層から）
-     */
-    public static StudyPlan restore(final StudyPlanId id, final UserId userId, final String title, 
-                                   final String description, final LocalDate startDate, final LocalDate endDate,
-                                   final StudyPlanStatus status, final Integer targetHoursPerDay) {
-        final int validatedTargetHours = Optional.ofNullable(targetHoursPerDay)
-            .map(StudyPlan::validateAndGetTargetHours)
-            .orElse(DEFAULT_TARGET_HOURS);
-            
-        return new StudyPlan(id, userId, title, description, startDate, endDate, status, validatedTargetHours);
     }
     
     /**
@@ -123,35 +96,6 @@ public final class StudyPlan implements AggregateRootMarker<StudyPlanId> {
             throw new IllegalStateException("完了した学習計画はキャンセルできません");
         }
         return changeStatus(StudyPlanStatus.CANCELLED);
-    }
-    
-    // Getters
-    public UserId getUserId() {
-        return userId;
-    }
-    
-    public String getTitle() {
-        return title;
-    }
-    
-    public String getDescription() {
-        return description;
-    }
-    
-    public LocalDate getStartDate() {
-        return startDate;
-    }
-    
-    public LocalDate getEndDate() {
-        return endDate;
-    }
-    
-    public StudyPlanStatus getStatus() {
-        return status;
-    }
-    
-    public int getTargetHoursPerDay() {
-        return targetHoursPerDay;
     }
     
     // EntityMarkerの実装

@@ -9,7 +9,7 @@ import java.util.Objects;
 
 /**
  * StudyCategoryエンティティのファクトリクラス
- * GoF Factory Pattern
+ * Package-privateコンストラクタを直接呼び出し
  */
 @Component
 public class StudyCategoryFactory {
@@ -20,7 +20,7 @@ public class StudyCategoryFactory {
     public StudyCategory createNewCategory(final String name, final String description, final int displayOrder) {
         validateCreationInputs(name, description, displayOrder);
         
-        return StudyCategory.create(name, description, displayOrder);
+        return new StudyCategory(StudyCategoryId.generate(), name, description, displayOrder);  // 直接new
     }
     
     /**
@@ -30,7 +30,7 @@ public class StudyCategoryFactory {
                                         final String description, final int displayOrder) {
         validateRestorationInputs(id, name, description, displayOrder);
         
-        return StudyCategory.restore(id, name, description, displayOrder);
+        return new StudyCategory(id, name, description, displayOrder);  // 直接new
     }
     
     /**

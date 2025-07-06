@@ -5,18 +5,20 @@ import com.learningapp.base.domain.entity.EntityMarker;
 import com.learningapp.base.domain.valueobject.StudyCategoryId;
 import com.learningapp.base.domain.valueobject.StudyGoalId;
 import com.learningapp.base.domain.valueobject.StudyPlanId;
+import com.learningapp.plan.domain.strategy.DifficultyStrategy;
+import lombok.Getter;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * 学習目標エンティティ
  * 学習計画の集約内エンティティ
- * Effective Java Item 18: 継承よりもコンポジション
- * Effective Java Item 17: 可変性を最小限に抑える
- * Effective Java Item 55: Optionalを適切に使用する
+ * 
+ * staticファクトリーメソッドを完全削除、StudyGoalFactoryでのみ生成
+ * Strategy Patternで複雑な条件分岐を排除
  */
+@Getter
 public final class StudyGoal implements EntityMarker<StudyGoalId> {
     
     private static final int MAX_TARGET_HOURS = 10000;
@@ -31,54 +33,25 @@ public final class StudyGoal implements EntityMarker<StudyGoalId> {
     private final int currentBestScore;
     private final int totalStudiedHours;
     
-    private StudyGoal(final StudyGoalId id, final StudyPlanId studyPlanId, final StudyCategoryId categoryId,
-                     final int targetScore, final int targetHours, final int currentBestScore, final int totalStudiedHours) {
+    // Package-private：Factoryからのみアクセス可能
+    StudyGoal(final StudyGoalId id, final StudyPlanId studyPlanId, final StudyCategoryId categoryId,
+             final int targetScore, final int targetHours, final int currentBestScore, final int totalStudiedHours) {
         this.entityBase = new EntityBase<>(id);
         this.studyPlanId = Objects.requireNonNull(studyPlanId, "StudyPlanId must not be null");
         this.categoryId = Objects.requireNonNull(categoryId, "StudyCategoryId must not be null");
-        this.targetScore = targetScore;
-        this.targetHours = targetHours;
+        this.targetScore = validateScore(targetScore);
+        this.targetHours = validateHours(targetHours);
         this.currentBestScore = Math.max(0, currentBestScore);
         this.totalStudiedHours = Math.max(0, totalStudiedHours);
     }
     
     /**
-     * 新規学習目標作成
-     */
-    public static StudyGoal create(final StudyPlanId studyPlanId, final StudyCategoryId categoryId,
-                                   final Integer targetScore, final Integer targetHours) {
-        final int validatedTargetScore = validateAndGetScore(targetScore);
-        final int validatedTargetHours = validateAndGetHours(targetHours);
-        
-        return new StudyGoal(StudyGoalId.generate(), studyPlanId, categoryId, 
-                           validatedTargetScore, validatedTargetHours, 0, 0);
-    }
-    
-    /**
-     * 既存学習目標復元（永続化層から）
-     */
-    public static StudyGoal restore(final StudyGoalId id, final StudyPlanId studyPlanId, final StudyCategoryId categoryId,
-                                   final Integer targetScore, final Integer targetHours, 
-                                   final Integer currentBestScore, final Integer totalStudiedHours) {
-        final int validatedTargetScore = validateAndGetScore(targetScore);
-        final int validatedTargetHours = validateAndGetHours(targetHours);
-        final int validatedCurrentBestScore = Optional.ofNullable(currentBestScore).orElse(0);
-        final int validatedTotalStudiedHours = Optional.ofNullable(totalStudiedHours).orElse(0);
-        
-        return new StudyGoal(id, studyPlanId, categoryId, validatedTargetScore, validatedTargetHours,
-                           validatedCurrentBestScore, validatedTotalStudiedHours);
-    }
-    
-    /**
      * 目標更新（新しいインスタンスを返す - 不変性）
      */
-    public StudyGoal updateGoal(final Integer newTargetScore, final Integer newTargetHours) {
-        final int validatedTargetScore = validateAndGetScore(newTargetScore);
-        final int validatedTargetHours = validateAndGetHours(newTargetHours);
-        
+    public StudyGoal updateGoal(final int newTargetScore, final int newTargetHours) {
         final StudyGoal updatedGoal = new StudyGoal(
             this.getId(), this.studyPlanId, this.categoryId,
-            validatedTargetScore, validatedTargetHours, 
+            newTargetScore, newTargetHours, 
             this.currentBestScore, this.totalStudiedHours
         );
         updatedGoal.entityBase.updateTimestamp();
@@ -87,17 +60,11 @@ public final class StudyGoal implements EntityMarker<StudyGoalId> {
     
     /**
      * 進捗更新（新しいインスタンスを返す - 不変性）
+     * ガード節使用
      */
     public StudyGoal updateProgress(final Integer newScore, final Integer additionalHours) {
-        final int updatedBestScore = Optional.ofNullable(newScore)
-            .filter(score -> score >= MIN_SCORE && score <= MAX_SCORE)
-            .map(score -> Math.max(this.currentBestScore, score))
-            .orElse(this.currentBestScore);
-            
-        final int updatedTotalHours = Optional.ofNullable(additionalHours)
-            .filter(hours -> hours > 0)
-            .map(hours -> this.totalStudiedHours + hours)
-            .orElse(this.totalStudiedHours);
+        final int updatedBestScore = calculateUpdatedBestScore(newScore);
+        final int updatedTotalHours = calculateUpdatedTotalHours(additionalHours);
         
         final StudyGoal updatedGoal = new StudyGoal(
             this.getId(), this.studyPlanId, this.categoryId,
@@ -106,31 +73,6 @@ public final class StudyGoal implements EntityMarker<StudyGoalId> {
         );
         updatedGoal.entityBase.updateTimestamp();
         return updatedGoal;
-    }
-    
-    // Getters
-    public StudyPlanId getStudyPlanId() {
-        return studyPlanId;
-    }
-    
-    public StudyCategoryId getCategoryId() {
-        return categoryId;
-    }
-    
-    public int getTargetScore() {
-        return targetScore;
-    }
-    
-    public int getTargetHours() {
-        return targetHours;
-    }
-    
-    public int getCurrentBestScore() {
-        return currentBestScore;
-    }
-    
-    public int getTotalStudiedHours() {
-        return totalStudiedHours;
     }
     
     // EntityMarkerの実装
@@ -172,25 +114,44 @@ public final class StudyGoal implements EntityMarker<StudyGoalId> {
         return isScoreTargetAchieved() && isHoursTargetAchieved();
     }
     
-    /**
-     * 残り必要学習時間
-     */
     public int getRemainingHours() {
         return Math.max(0, targetHours - totalStudiedHours);
     }
     
-    /**
-     * 目標スコアまでの差
-     */
     public int getScoreGap() {
         return Math.max(0, targetScore - currentBestScore);
     }
     
-    /**
-     * 全体の達成率（スコアと時間の平均）
-     */
     public double getOverallAchievementRate() {
         return (getScoreAchievementRate() + getHoursAchievementRate()) / 2.0;
+    }
+    
+    /**
+     * 目標の難易度判定（Strategy Pattern使用）
+     */
+    public GoalDifficulty getDifficulty() {
+        return DifficultyStrategy.determineDifficulty(targetScore, targetHours);
+    }
+    
+    /**
+     * 推奨事項取得（Strategy Pattern使用）
+     */
+    public String getRecommendation() {
+        return DifficultyStrategy.getRecommendation(targetScore, targetHours)
+            .orElse("目標に向けて頑張りましょう。");
+    }
+    
+    /**
+     * 進捗ステータス（ガード節使用）
+     */
+    public ProgressStatus getProgressStatus() {
+        final double achievementRate = getOverallAchievementRate();
+        
+        if (achievementRate >= 100.0) return ProgressStatus.COMPLETED;
+        if (achievementRate >= 80.0) return ProgressStatus.ALMOST_DONE;
+        if (achievementRate >= 50.0) return ProgressStatus.ON_TRACK;
+        if (achievementRate >= 25.0) return ProgressStatus.BEHIND;
+        return ProgressStatus.FAR_BEHIND;
     }
     
     @Override
@@ -217,23 +178,32 @@ public final class StudyGoal implements EntityMarker<StudyGoalId> {
                 ", currentBestScore=" + currentBestScore +
                 ", totalStudiedHours=" + totalStudiedHours +
                 ", achievementRate=" + String.format("%.1f%%", getOverallAchievementRate()) +
+                ", difficulty=" + getDifficulty() +
+                ", progressStatus=" + getProgressStatus() +
                 '}';
     }
     
-    private static int validateAndGetScore(final Integer score) {
-        if (score == null) {
-            throw new IllegalArgumentException("目標スコアは必須です");
-        }
+    // Private helper methods（ガード節使用）
+    private int calculateUpdatedBestScore(final Integer newScore) {
+        if (newScore == null) return this.currentBestScore;
+        if (newScore < MIN_SCORE || newScore > MAX_SCORE) return this.currentBestScore;
+        return Math.max(this.currentBestScore, newScore);
+    }
+    
+    private int calculateUpdatedTotalHours(final Integer additionalHours) {
+        if (additionalHours == null) return this.totalStudiedHours;
+        if (additionalHours <= 0) return this.totalStudiedHours;
+        return this.totalStudiedHours + additionalHours;
+    }
+    
+    private static int validateScore(final int score) {
         if (score < MIN_SCORE || score > MAX_SCORE) {
             throw new IllegalArgumentException("スコアは" + MIN_SCORE + "-" + MAX_SCORE + "の範囲で設定してください");
         }
         return score;
     }
     
-    private static int validateAndGetHours(final Integer hours) {
-        if (hours == null) {
-            throw new IllegalArgumentException("目標学習時間は必須です");
-        }
+    private static int validateHours(final int hours) {
         if (hours < 0) {
             throw new IllegalArgumentException("目標学習時間は0時間以上で設定してください");
         }
@@ -241,5 +211,47 @@ public final class StudyGoal implements EntityMarker<StudyGoalId> {
             throw new IllegalArgumentException("目標学習時間は" + MAX_TARGET_HOURS + "時間以内で設定してください");
         }
         return hours;
+    }
+    
+    /**
+     * 目標の難易度
+     */
+    public enum GoalDifficulty {
+        VERY_EASY("とても易しい"),
+        EASY("易しい"),
+        MEDIUM("普通"),
+        HARD("難しい"),
+        VERY_HARD("とても難しい");
+        
+        private final String displayName;
+        
+        GoalDifficulty(final String displayName) {
+            this.displayName = displayName;
+        }
+        
+        public String getDisplayName() {
+            return displayName;
+        }
+    }
+    
+    /**
+     * 進捗ステータス
+     */
+    public enum ProgressStatus {
+        COMPLETED("完了"),
+        ALMOST_DONE("もうすぐ完了"),
+        ON_TRACK("順調"),
+        BEHIND("遅れ気味"),
+        FAR_BEHIND("大幅に遅れ");
+        
+        private final String displayName;
+        
+        ProgressStatus(final String displayName) {
+            this.displayName = displayName;
+        }
+        
+        public String getDisplayName() {
+            return displayName;
+        }
     }
 }

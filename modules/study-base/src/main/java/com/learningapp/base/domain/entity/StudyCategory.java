@@ -1,6 +1,7 @@
 package com.learningapp.base.domain.entity;
 
 import com.learningapp.base.domain.valueobject.StudyCategoryId;
+import lombok.Getter;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -8,8 +9,8 @@ import java.util.Objects;
 /**
  * 学習カテゴリエンティティ
  * 午前I、午前II、午後I、午後II等の学習分野
- * Effective Java Item 18: 継承よりもコンポジションを選ぶ
  */
+@Getter
 public final class StudyCategory implements EntityMarker<StudyCategoryId> {
     
     private final EntityBase<StudyCategoryId> entityBase;
@@ -17,25 +18,12 @@ public final class StudyCategory implements EntityMarker<StudyCategoryId> {
     private final String description;
     private final int displayOrder;
     
-    private StudyCategory(final StudyCategoryId id, final String name, final String description, final int displayOrder) {
+    // Package-private：Factoryからのみアクセス可能
+    StudyCategory(final StudyCategoryId id, final String name, final String description, final int displayOrder) {
         this.entityBase = new EntityBase<>(id);
         this.name = validateAndGetName(name);
         this.description = description != null ? description.trim() : "";
         this.displayOrder = Math.max(0, displayOrder);
-    }
-    
-    /**
-     * 新規カテゴリ作成
-     */
-    public static StudyCategory create(final String name, final String description, final int displayOrder) {
-        return new StudyCategory(StudyCategoryId.generate(), name, description, displayOrder);
-    }
-    
-    /**
-     * 既存カテゴリ復元（永続化層から）
-     */
-    public static StudyCategory restore(final StudyCategoryId id, final String name, final String description, final int displayOrder) {
-        return new StudyCategory(id, name, description, displayOrder);
     }
     
     /**
@@ -45,19 +33,6 @@ public final class StudyCategory implements EntityMarker<StudyCategoryId> {
         final StudyCategory updatedCategory = new StudyCategory(this.getId(), newName, newDescription, newDisplayOrder);
         updatedCategory.entityBase.updateTimestamp();
         return updatedCategory;
-    }
-    
-    // Getters
-    public String getName() {
-        return name;
-    }
-    
-    public String getDescription() {
-        return description;
-    }
-    
-    public int getDisplayOrder() {
-        return displayOrder;
     }
     
     // EntityMarkerの実装

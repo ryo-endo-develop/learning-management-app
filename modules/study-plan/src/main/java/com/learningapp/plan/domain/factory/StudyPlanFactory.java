@@ -11,10 +11,12 @@ import java.util.Objects;
 
 /**
  * StudyPlanエンティティのファクトリクラス
- * 複雑なビジネスルールや将来の拡張に対応
+ * Package-privateコンストラクタを直接呼び出し
  */
 @Component
 public class StudyPlanFactory {
+    
+    private static final int DEFAULT_TARGET_HOURS = 2;
     
     /**
      * 新規学習計画作成
@@ -24,7 +26,10 @@ public class StudyPlanFactory {
                                        final Integer targetHoursPerDay) {
         validateCreationInputs(userId, title, startDate, endDate, targetHoursPerDay);
         
-        return StudyPlan.create(userId, title, description, startDate, endDate, targetHoursPerDay);
+        final int validatedTargetHours = targetHoursPerDay != null ? targetHoursPerDay : DEFAULT_TARGET_HOURS;
+        
+        return new StudyPlan(StudyPlanId.generate(), userId, title, description, 
+                           startDate, endDate, StudyPlanStatus.ACTIVE, validatedTargetHours);  // 直接new
     }
     
     /**
@@ -35,7 +40,9 @@ public class StudyPlanFactory {
                                      final StudyPlanStatus status, final Integer targetHoursPerDay) {
         validateRestorationInputs(id, userId, title, startDate, endDate, status, targetHoursPerDay);
         
-        return StudyPlan.restore(id, userId, title, description, startDate, endDate, status, targetHoursPerDay);
+        final int validatedTargetHours = targetHoursPerDay != null ? targetHoursPerDay : DEFAULT_TARGET_HOURS;
+        
+        return new StudyPlan(id, userId, title, description, startDate, endDate, status, validatedTargetHours);  // 直接new
     }
     
     /**
@@ -98,11 +105,6 @@ public class StudyPlanFactory {
         if (durationDays > 365) {
             throw new IllegalArgumentException("学習計画の期間は1年以内で設定してください");
         }
-        
-        // 将来的なビジネスルール拡張ポイント
-        // - ユーザーの同時実行中計画数制限
-        // - 企業の学習ポリシーチェック
-        // - 祝日・休暇を考慮した期間調整等
     }
     
     private void validateRestorationInputs(final StudyPlanId id, final UserId userId, final String title,
