@@ -9,9 +9,11 @@ import java.util.regex.Pattern;
 
 /**
  * ユーザーエンティティ
- * Effective Java Item 18: 継承よりもコンポジションを選ぶ
+ * Effective Java Item 18: 継承よりもコンポジション
  * Effective Java Item 17: 可変性を最小限に抑える
  * Effective Java Item 55: Optionalを適切に使用する
+ * 
+ * staticファクトリーメソッドを削除し、UserFactoryクラスで生成を担当
  */
 public final class User implements EntityMarker<UserId> {
     
@@ -22,23 +24,24 @@ public final class User implements EntityMarker<UserId> {
     private final String name;
     private final String email;
     
-    private User(final UserId id, final String name, final String email) {
+    // パッケージプライベート：Factoryからのみアクセス可能
+    User(final UserId id, final String name, final String email) {
         this.entityBase = new EntityBase<>(id);
         this.name = validateAndGetName(name);
         this.email = validateAndGetEmail(email);
     }
     
     /**
-     * 新規ユーザー作成
+     * 新規ユーザー作成（Factoryから呼び出し用）
      */
-    public static User create(final String name, final String email) {
+    static User create(final String name, final String email) {
         return new User(UserId.generate(), name, email);
     }
     
     /**
-     * 既存ユーザー復元（永続化層から）
+     * 既存ユーザー復元（Factoryから呼び出し用）
      */
-    public static User restore(final UserId id, final String name, final String email) {
+    static User restore(final UserId id, final String name, final String email) {
         return new User(id, name, email);
     }
     
