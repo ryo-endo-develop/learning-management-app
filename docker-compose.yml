@@ -1,0 +1,54 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: learning-app-postgres
+    environment:
+      POSTGRES_DB: learning_management
+      POSTGRES_USER: learning_user
+      POSTGRES_PASSWORD: learning_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/main/resources/db/init:/docker-entrypoint-initdb.d
+    networks:
+      - learning-network
+
+  # Spring Boot Application
+  app:
+    build: .
+    container_name: learning-app
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: learning_management
+      DB_USER: learning_user
+      DB_PASSWORD: learning_pass
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - learning-network
+    volumes:
+      - .:/workspace
+    # 開発用: ファイル変更を監視してホットリロード
+    command: ["./gradlew", "bootRun"]
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: learning-app-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - learning-network
+
+volumes:
+  postgres_data:
+
+networks:
+  learning-network:
+    driver: bridge

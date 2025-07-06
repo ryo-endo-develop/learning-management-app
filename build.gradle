@@ -1,0 +1,138 @@
+// ルートプロジェクトの設定
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.2.0' apply false
+    id 'io.spring.dependency-management' version '1.1.4' apply false
+    id 'org.flywaydb.flyway' version '9.22.3' apply false
+}
+
+// 全サブプロジェクト共通設定
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'org.springframework.boot'
+    apply plugin: 'io.spring.dependency-management'
+    
+    group = 'com.learningapp'
+    version = '0.0.1-SNAPSHOT'
+    
+    java {
+        sourceCompatibility = '17'
+    }
+    
+    configurations {
+        compileOnly {
+            extendsFrom annotationProcessor
+        }
+    }
+    
+    repositories {
+        mavenCentral()
+    }
+    
+    // 共通依存関係
+    dependencies {
+        // Spring Boot Common
+        implementation 'org.springframework.boot:spring-boot-starter'
+        implementation 'org.springframework.boot:spring-boot-starter-validation'
+        
+        // Utilities
+        implementation 'org.apache.commons:commons-lang3:3.13.0'
+        
+        // Lombok
+        compileOnly 'org.projectlombok:lombok'
+        annotationProcessor 'org.projectlombok:lombok'
+        
+        // Testing
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    }
+    
+    tasks.named('test') {
+        useJUnitPlatform()
+    }
+}
+
+// モジュール別設定
+project(':study-all') {
+    apply plugin: 'org.flywaydb.flyway'
+    
+    dependencies {
+        // 他のモジュールへの依存
+        implementation project(':study-base')
+        implementation project(':study-plan')
+        implementation project(':study-session')
+        implementation project(':study-analytics')
+        
+        // Web API
+        implementation 'org.springframework.boot:spring-boot-starter-web'
+        implementation 'org.springframework.boot:spring-boot-starter-actuator'
+        
+        // Database
+        implementation 'org.springframework.boot:spring-boot-starter-data-jdbc'
+        implementation 'org.postgresql:postgresql'
+        implementation 'org.flywaydb:flyway-core'
+        
+        // Redis
+        implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    }
+    
+    // Flyway configuration
+    flyway {
+        url = 'jdbc:postgresql://localhost:5432/learning_management'
+        user = 'learning_user'
+        password = 'learning_pass'
+        locations = ['classpath:db/migration']
+    }
+}
+
+project(':study-base') {
+    dependencies {
+        // CQRS基盤
+        implementation 'org.springframework.boot:spring-boot-starter-data-jdbc'
+        implementation 'org.springframework.boot:spring-boot-starter-cache'
+        
+        // MyBatis
+        implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.3'
+        implementation 'org.mybatis.dynamic-sql:mybatis-dynamic-sql:1.5.0'
+        
+        // MapStruct
+        implementation 'org.mapstruct:mapstruct:1.5.5.Final'
+        annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
+    }
+}
+
+project(':study-plan') {
+    dependencies {
+        implementation project(':study-base')
+        
+        // MyBatis
+        implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.3'
+        implementation 'org.mybatis.dynamic-sql:mybatis-dynamic-sql:1.5.0'
+    }
+}
+
+project(':study-session') {
+    dependencies {
+        implementation project(':study-base')
+        implementation project(':study-plan')
+        
+        // MyBatis
+        implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.3'
+        implementation 'org.mybatis.dynamic-sql:mybatis-dynamic-sql:1.5.0'
+    }
+}
+
+project(':study-analytics') {
+    dependencies {
+        implementation project(':study-base')
+        implementation project(':study-plan')
+        implementation project(':study-session')
+        
+        // Analytics specific
+        implementation 'org.springframework.boot:spring-boot-starter-cache'
+        
+        // MyBatis
+        implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.3'
+        implementation 'org.mybatis.dynamic-sql:mybatis-dynamic-sql:1.5.0'
+    }
+}

@@ -1,0 +1,15 @@
+rootProject.name = 'learning-management-app'
+
+// マルチモジュール構成
+include 'study-all'
+include 'study-base'
+include 'study-plan'
+include 'study-session'
+include 'study-analytics'
+
+// モジュール間の依存関係を明確に定義
+project(':study-all').projectDir = file('modules/study-all')
+project(':study-base').projectDir = file('modules/study-base')
+project(':study-plan').projectDir = file('modules/study-plan')
+project(':study-session').projectDir = file('modules/study-session')
+project(':study-analytics').projectDir = file('modules/study-analytics')
