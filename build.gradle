@@ -76,12 +76,13 @@ project(':study-all') {
         implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     }
     
-    // Flyway configuration
+    // Flyway configuration - study-allモジュール内のマイグレーションファイルを使用
     flyway {
         url = 'jdbc:postgresql://localhost:5432/learning_management'
         user = 'learning_user'
         password = 'learning_pass'
         locations = ['classpath:db/migration']
+        baselineOnMigrate = true
     }
 }
 

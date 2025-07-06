@@ -1,0 +1,13 @@
+// study-base モジュールの設定
+// 共通基盤・CQRS基盤の責務
+description = 'Base module with common entities and CQRS infrastructure'
+
+// ライブラリモジュールとして設定
+bootJar {
+    enabled = false
+}
+
+jar {
+    enabled = true
+    archiveClassifier = ''
+}

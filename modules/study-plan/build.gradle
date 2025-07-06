@@ -1,0 +1,12 @@
+// study-plan モジュールの設定
+// 学習計画ドメインの責務
+description = 'Study plan domain module'
+
+bootJar {
+    enabled = false
+}
+
+jar {
+    enabled = true
+    archiveClassifier = ''
+}

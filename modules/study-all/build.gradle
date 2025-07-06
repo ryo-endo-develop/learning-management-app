@@ -1,0 +1,8 @@
+// study-all モジュールの設定
+// アプリケーション起動・API公開の責務
+description = 'Main application module for Learning Management App'
+
+// このモジュールだけがbootJarタスクを持つ
+jar {
+    enabled = false
+}

@@ -1,0 +1,12 @@
+// study-analytics モジュールの設定
+// 学習分析・統計ドメインの責務
+description = 'Study analytics and statistics domain module'
+
+bootJar {
+    enabled = false
+}
+
+jar {
+    enabled = true
+    archiveClassifier = ''
+}

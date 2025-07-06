@@ -1,0 +1,12 @@
+// study-session モジュールの設定
+// 学習セッションドメインの責務
+description = 'Study session domain module'
+
+bootJar {
+    enabled = false
+}
+
+jar {
+    enabled = true
+    archiveClassifier = ''
+}
