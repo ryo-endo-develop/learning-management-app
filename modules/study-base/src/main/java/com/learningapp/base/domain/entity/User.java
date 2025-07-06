@@ -6,32 +6,28 @@ import lombok.Getter;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.regex.Pattern;
 
 /**
  * ユーザーエンティティ
- * Effective Java Item 18: 継承よりもコンポジション
- * Effective Java Item 17: 可変性を最小限に抑える
  */
 @Getter
 public final class User implements EntityMarker<UserId> {
-    
-    private static final Pattern EMAIL_PATTERN = 
-        Pattern.compile("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     
     private final EntityBase<UserId> entityBase;
     private final String name;
     private final String email;
     
     // Package-private：Factoryからのみアクセス可能
+    // バリデーションはFactoryで実施済み
     User(final UserId id, final String name, final String email) {
         this.entityBase = new EntityBase<>(id);
-        this.name = validateAndGetName(name);
-        this.email = validateAndGetEmail(email);
+        this.name = Objects.requireNonNull(name, "Name must not be null");
+        this.email = Objects.requireNonNull(email, "Email must not be null");
     }
     
     /**
      * プロフィール更新（新しいインスタンスを返す - 不変性）
+     * バリデーションは呼び出し側（Application Service）で実施
      */
     public User updateProfile(final String newName, final String newEmail) {
         final User updatedUser = new User(this.getId(), newName, newEmail);
@@ -74,6 +70,7 @@ public final class User implements EntityMarker<UserId> {
     
     /**
      * 業務ロジック: 企業メールかどうか判定
+     * シンプルな判定のみ（複雑な判定はEmailValidatorに委譲）
      */
     public boolean isCorporateEmail() {
         return getEmailDomain()
@@ -104,27 +101,5 @@ public final class User implements EntityMarker<UserId> {
                 ", email='" + email + '\'' +
                 ", createdAt=" + getCreatedAt() +
                 '}';
-    }
-    
-    private static String validateAndGetName(final String name) {
-        if (name == null || name.trim().isEmpty()) {
-            throw new IllegalArgumentException("ユーザー名は必須です");
-        }
-        final String trimmedName = name.trim();
-        if (trimmedName.length() > 100) {
-            throw new IllegalArgumentException("ユーザー名は100文字以内で入力してください");
-        }
-        return trimmedName;
-    }
-    
-    private static String validateAndGetEmail(final String email) {
-        if (email == null || email.trim().isEmpty()) {
-            throw new IllegalArgumentException("メールアドレスは必須です");
-        }
-        final String trimmedEmail = email.trim().toLowerCase();
-        if (!EMAIL_PATTERN.matcher(trimmedEmail).matches()) {
-            throw new IllegalArgumentException("有効なメールアドレスを入力してください");
-        }
-        return trimmedEmail;
     }
 }

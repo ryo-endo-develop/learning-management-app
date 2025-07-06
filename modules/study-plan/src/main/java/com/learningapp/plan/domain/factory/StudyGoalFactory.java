@@ -4,6 +4,8 @@ import com.learningapp.base.domain.valueobject.StudyCategoryId;
 import com.learningapp.base.domain.valueobject.StudyGoalId;
 import com.learningapp.base.domain.valueobject.StudyPlanId;
 import com.learningapp.plan.domain.entity.StudyGoal;
+import com.learningapp.plan.domain.validator.StudyGoalValidator;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -11,19 +13,32 @@ import java.util.Objects;
 
 /**
  * StudyGoalエンティティのファクトリクラス
- * Package-privateコンストラクタを使用してエンティティを生成
+ * Validator Strategy Patternを使用
  */
 @Component
+@RequiredArgsConstructor
 public class StudyGoalFactory {
+    
+    private final StudyGoalValidator validator;
     
     /**
      * 新規学習目標作成
      */
     public StudyGoal createNewGoal(final StudyPlanId studyPlanId, final StudyCategoryId categoryId,
                                    final int targetScore, final int targetHours) {
-        validateCreationInputs(studyPlanId, categoryId, targetScore, targetHours);
+        Objects.requireNonNull(studyPlanId, "StudyPlanId must not be null");
+        Objects.requireNonNull(categoryId, "StudyCategoryId must not be null");
         
-        return new StudyGoal(StudyGoalId.generate(), studyPlanId, categoryId, targetScore, targetHours, 0, 0);
+        final int validatedScore = validator.validateScore(targetScore);
+        final int validatedHours = validator.validateHours(targetHours);
+        
+        // 目標の妥当性評価
+        final var assessment = validator.assessGoalValidity(validatedScore, validatedHours);
+        if (!assessment.isValid()) {
+            throw new IllegalArgumentException(assessment.message());
+        }
+        
+        return new StudyGoal(StudyGoalId.generate(), studyPlanId, categoryId, validatedScore, validatedHours, 0, 0);
     }
     
     /**
@@ -32,10 +47,15 @@ public class StudyGoalFactory {
     public StudyGoal restoreGoal(final StudyGoalId id, final StudyPlanId studyPlanId, final StudyCategoryId categoryId,
                                 final int targetScore, final int targetHours, 
                                 final int currentBestScore, final int totalStudiedHours) {
-        validateRestorationInputs(id, studyPlanId, categoryId, targetScore, targetHours);
+        Objects.requireNonNull(id, "StudyGoalId must not be null");
+        Objects.requireNonNull(studyPlanId, "StudyPlanId must not be null");
+        Objects.requireNonNull(categoryId, "StudyCategoryId must not be null");
         
-        return new StudyGoal(id, studyPlanId, categoryId, targetScore, targetHours, 
-                           currentBestScore, totalStudiedHours);
+        final int validatedScore = validator.validateScore(targetScore);
+        final int validatedHours = validator.validateHours(targetHours);
+        
+        return new StudyGoal(id, studyPlanId, categoryId, validatedScore, validatedHours, 
+                           Math.max(0, currentBestScore), Math.max(0, totalStudiedHours));
     }
     
     /**
@@ -43,17 +63,22 @@ public class StudyGoalFactory {
      */
     public List<StudyGoal> createDefaultDatabaseSpecialistGoals(final StudyPlanId studyPlanId, 
                                                                final List<StudyCategoryId> categoryIds) {
-        validateDefaultGoalsInputs(studyPlanId, categoryIds);
+        Objects.requireNonNull(studyPlanId, "StudyPlanId must not be null");
+        Objects.requireNonNull(categoryIds, "CategoryIds must not be null");
+        
+        if (categoryIds.size() < 8) {
+            throw new IllegalArgumentException("デフォルト目標作成には8つのカテゴリが必要です");
+        }
         
         return List.of(
-            createGoalForCategory(studyPlanId, categoryIds.get(0), 70, 30), // 午前I
-            createGoalForCategory(studyPlanId, categoryIds.get(1), 80, 40), // 午前II
-            createGoalForCategory(studyPlanId, categoryIds.get(2), 60, 50), // 午後I
-            createGoalForCategory(studyPlanId, categoryIds.get(3), 60, 30), // 午後II
-            createGoalForCategory(studyPlanId, categoryIds.get(4), 85, 25), // SQL実践
-            createGoalForCategory(studyPlanId, categoryIds.get(5), 75, 35), // データベース設計
-            createGoalForCategory(studyPlanId, categoryIds.get(6), 70, 20), // パフォーマンス
-            createGoalForCategory(studyPlanId, categoryIds.get(7), 65, 15)  // 運用管理
+            createNewGoal(studyPlanId, categoryIds.get(0), 70, 30), // 午前I
+            createNewGoal(studyPlanId, categoryIds.get(1), 80, 40), // 午前II
+            createNewGoal(studyPlanId, categoryIds.get(2), 60, 50), // 午後I
+            createNewGoal(studyPlanId, categoryIds.get(3), 60, 30), // 午後II
+            createNewGoal(studyPlanId, categoryIds.get(4), 85, 25), // SQL実践
+            createNewGoal(studyPlanId, categoryIds.get(5), 75, 35), // データベース設計
+            createNewGoal(studyPlanId, categoryIds.get(6), 70, 20), // パフォーマンス
+            createNewGoal(studyPlanId, categoryIds.get(7), 65, 15)  // 運用管理
         );
     }
     
@@ -62,9 +87,6 @@ public class StudyGoalFactory {
      */
     public StudyGoal createHighScoreGoal(final StudyPlanId studyPlanId, final StudyCategoryId categoryId,
                                         final int baseTargetHours) {
-        validateCreationInputs(studyPlanId, categoryId, 90, baseTargetHours);
-        
-        // 高得点目標は通常より多くの学習時間を設定
         final int enhancedHours = Math.min(baseTargetHours * 2, 100);
         return createNewGoal(studyPlanId, categoryId, 90, enhancedHours);
     }
@@ -74,8 +96,6 @@ public class StudyGoalFactory {
      */
     public StudyGoal createBasicGoal(final StudyPlanId studyPlanId, final StudyCategoryId categoryId,
                                     final int targetHours) {
-        validateCreationInputs(studyPlanId, categoryId, 60, targetHours);
-        
         return createNewGoal(studyPlanId, categoryId, 60, targetHours);
     }
     
@@ -88,52 +108,27 @@ public class StudyGoalFactory {
             throw new IllegalArgumentException("短期集中目標のスコアは70以上で設定してください");
         }
         
-        // 短期集中のため学習時間を多めに設定
         final int intensiveHours = targetScore > 80 ? 15 : 10;
         return createNewGoal(studyPlanId, categoryId, targetScore, intensiveHours);
     }
     
-    private StudyGoal createGoalForCategory(final StudyPlanId studyPlanId, final StudyCategoryId categoryId,
-                                           final int targetScore, final int targetHours) {
-        return createNewGoal(studyPlanId, categoryId, targetScore, targetHours);
+    /**
+     * 合格ライン目標作成（確実な合格を目指す）
+     */
+    public StudyGoal createPassingGoal(final StudyPlanId studyPlanId, final StudyCategoryId categoryId) {
+        // 合格ライン（60点）より少し余裕を持った設定
+        return createNewGoal(studyPlanId, categoryId, 65, 20);
     }
     
-    private void validateCreationInputs(final StudyPlanId studyPlanId, final StudyCategoryId categoryId,
-                                       final int targetScore, final int targetHours) {
-        Objects.requireNonNull(studyPlanId, "StudyPlanId must not be null");
-        Objects.requireNonNull(categoryId, "StudyCategoryId must not be null");
-        
-        if (targetScore < 0 || targetScore > 100) {
-            throw new IllegalArgumentException("目標スコアは0-100の範囲で設定してください");
+    /**
+     * 進捗更新用ヘルパーメソッド
+     */
+    public StudyGoal updateGoalProgress(final StudyGoal goal, final Integer newScore, final Integer additionalHours) {
+        final var validation = validator.validateProgressUpdate(newScore, additionalHours);
+        if (!validation.isValid()) {
+            throw new IllegalArgumentException(validation.message());
         }
         
-        if (targetHours < 0) {
-            throw new IllegalArgumentException("目標学習時間は0時間以上で設定してください");
-        }
-        
-        if (targetHours > 1000) {
-            throw new IllegalArgumentException("目標学習時間は1000時間以内で設定してください");
-        }
-    }
-    
-    private void validateRestorationInputs(final StudyGoalId id, final StudyPlanId studyPlanId, 
-                                          final StudyCategoryId categoryId, final int targetScore, 
-                                          final int targetHours) {
-        Objects.requireNonNull(id, "StudyGoalId must not be null");
-        validateCreationInputs(studyPlanId, categoryId, targetScore, targetHours);
-    }
-    
-    private void validateDefaultGoalsInputs(final StudyPlanId studyPlanId, final List<StudyCategoryId> categoryIds) {
-        Objects.requireNonNull(studyPlanId, "StudyPlanId must not be null");
-        Objects.requireNonNull(categoryIds, "CategoryIds must not be null");
-        
-        if (categoryIds.size() < 8) {
-            throw new IllegalArgumentException("デフォルト目標作成には8つのカテゴリが必要です");
-        }
-        
-        final long distinctCount = categoryIds.stream().distinct().count();
-        if (distinctCount != categoryIds.size()) {
-            throw new IllegalArgumentException("カテゴリIDに重複があります");
-        }
+        return goal.updateProgress(newScore, additionalHours);
     }
 }

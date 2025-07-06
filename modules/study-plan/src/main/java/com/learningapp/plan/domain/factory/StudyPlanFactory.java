@@ -4,6 +4,8 @@ import com.learningapp.base.domain.enums.StudyPlanStatus;
 import com.learningapp.base.domain.valueobject.StudyPlanId;
 import com.learningapp.base.domain.valueobject.UserId;
 import com.learningapp.plan.domain.entity.StudyPlan;
+import com.learningapp.plan.domain.validator.StudyPlanValidator;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -11,11 +13,13 @@ import java.util.Objects;
 
 /**
  * StudyPlanエンティティのファクトリクラス
- * Package-privateコンストラクタを直接呼び出し
+ * Validator Strategy Patternを使用
  */
 @Component
+@RequiredArgsConstructor
 public class StudyPlanFactory {
     
+    private final StudyPlanValidator validator;
     private static final int DEFAULT_TARGET_HOURS = 2;
     
     /**
@@ -24,12 +28,22 @@ public class StudyPlanFactory {
     public StudyPlan createNewStudyPlan(final UserId userId, final String title, final String description,
                                        final LocalDate startDate, final LocalDate endDate, 
                                        final Integer targetHoursPerDay) {
-        validateCreationInputs(userId, title, startDate, endDate, targetHoursPerDay);
+        Objects.requireNonNull(userId, "UserId must not be null");
         
-        final int validatedTargetHours = targetHoursPerDay != null ? targetHoursPerDay : DEFAULT_TARGET_HOURS;
+        final String validatedTitle = validator.validateAndNormalizeTitle(title);
+        validator.validateDateRange(startDate, endDate);
         
-        return new StudyPlan(StudyPlanId.generate(), userId, title, description, 
-                           startDate, endDate, StudyPlanStatus.ACTIVE, validatedTargetHours);  // 直接new
+        final int validatedTargetHours = targetHoursPerDay != null ? 
+            validator.validateTargetHours(targetHoursPerDay) : DEFAULT_TARGET_HOURS;
+        
+        // 実現可能性評価
+        final var feasibility = validator.evaluateFeasibility(startDate, endDate, validatedTargetHours);
+        if (!feasibility.isFeasible()) {
+            throw new IllegalArgumentException(feasibility.message());
+        }
+        
+        return new StudyPlan(StudyPlanId.generate(), userId, validatedTitle, description, 
+                           startDate, endDate, StudyPlanStatus.ACTIVE, validatedTargetHours);
     }
     
     /**
@@ -38,11 +52,17 @@ public class StudyPlanFactory {
     public StudyPlan restoreStudyPlan(final StudyPlanId id, final UserId userId, final String title, 
                                      final String description, final LocalDate startDate, final LocalDate endDate,
                                      final StudyPlanStatus status, final Integer targetHoursPerDay) {
-        validateRestorationInputs(id, userId, title, startDate, endDate, status, targetHoursPerDay);
+        Objects.requireNonNull(id, "StudyPlanId must not be null");
+        Objects.requireNonNull(userId, "UserId must not be null");
+        Objects.requireNonNull(status, "StudyPlanStatus must not be null");
         
-        final int validatedTargetHours = targetHoursPerDay != null ? targetHoursPerDay : DEFAULT_TARGET_HOURS;
+        final String validatedTitle = validator.validateAndNormalizeTitle(title);
+        validator.validateDateRange(startDate, endDate);
         
-        return new StudyPlan(id, userId, title, description, startDate, endDate, status, validatedTargetHours);  // 直接new
+        final int validatedTargetHours = targetHoursPerDay != null ? 
+            validator.validateTargetHours(targetHoursPerDay) : DEFAULT_TARGET_HOURS;
+        
+        return new StudyPlan(id, userId, validatedTitle, description, startDate, endDate, status, validatedTargetHours);
     }
     
     /**
@@ -52,7 +72,9 @@ public class StudyPlanFactory {
         final LocalDate startDate = LocalDate.now();
         final LocalDate endDate = examDate.minusDays(7); // 試験1週間前に完了
         
-        validateExamDate(examDate);
+        if (examDate.isBefore(LocalDate.now().plusDays(14))) {
+            throw new IllegalArgumentException("試験日は最低2週間後に設定してください");
+        }
         
         return createNewStudyPlan(
             userId,
@@ -60,7 +82,7 @@ public class StudyPlanFactory {
             "データベーススペシャリスト試験に合格するための学習計画",
             startDate,
             endDate,
-            2 // 1日2時間の学習
+            2
         );
     }
     
@@ -81,58 +103,22 @@ public class StudyPlanFactory {
             "短期集中学習計画（" + durationDays + "日間）",
             startDate,
             endDate,
-            4 // 1日4時間の集中学習
+            4
         );
     }
     
-    private void validateCreationInputs(final UserId userId, final String title, 
-                                       final LocalDate startDate, final LocalDate endDate, 
-                                       final Integer targetHoursPerDay) {
-        Objects.requireNonNull(userId, "UserId must not be null");
-        Objects.requireNonNull(title, "Title must not be null");
-        Objects.requireNonNull(startDate, "Start date must not be null");
-        Objects.requireNonNull(endDate, "End date must not be null");
-        
-        if (startDate.isBefore(LocalDate.now().minusDays(1))) {
-            throw new IllegalArgumentException("開始日は昨日以降で設定してください");
-        }
-        
-        if (startDate.isAfter(endDate)) {
-            throw new IllegalArgumentException("開始日は終了日より前である必要があります");
-        }
-        
+    /**
+     * 長期学習計画作成
+     */
+    public StudyPlan createLongTermPlan(final UserId userId, final String title, final String description,
+                                       final LocalDate startDate, final LocalDate endDate) {
         final long durationDays = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate);
-        if (durationDays > 365) {
-            throw new IllegalArgumentException("学習計画の期間は1年以内で設定してください");
-        }
-    }
-    
-    private void validateRestorationInputs(final StudyPlanId id, final UserId userId, final String title,
-                                          final LocalDate startDate, final LocalDate endDate,
-                                          final StudyPlanStatus status, final Integer targetHoursPerDay) {
-        Objects.requireNonNull(id, "StudyPlanId must not be null");
-        Objects.requireNonNull(status, "StudyPlanStatus must not be null");
         
-        // 復元時は過去日も許可（履歴データのため）
-        validateCreationInputsForRestore(userId, title, startDate, endDate, targetHoursPerDay);
-    }
-    
-    private void validateCreationInputsForRestore(final UserId userId, final String title, 
-                                                 final LocalDate startDate, final LocalDate endDate, 
-                                                 final Integer targetHoursPerDay) {
-        Objects.requireNonNull(userId, "UserId must not be null");
-        Objects.requireNonNull(title, "Title must not be null");
-        Objects.requireNonNull(startDate, "Start date must not be null");
-        Objects.requireNonNull(endDate, "End date must not be null");
+        if (durationDays < 90) {
+            throw new IllegalArgumentException("長期学習計画は90日以上で設定してください");
+        }
         
-        if (startDate.isAfter(endDate)) {
-            throw new IllegalArgumentException("開始日は終了日より前である必要があります");
-        }
-    }
-    
-    private void validateExamDate(final LocalDate examDate) {
-        if (examDate.isBefore(LocalDate.now().plusDays(14))) {
-            throw new IllegalArgumentException("試験日は最低2週間後に設定してください");
-        }
+        // 長期計画は無理のない時間設定
+        return createNewStudyPlan(userId, title, description, startDate, endDate, 1);
     }
 }

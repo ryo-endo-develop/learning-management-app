@@ -1,7 +1,9 @@
 package com.learningapp.base.domain.factory;
 
 import com.learningapp.base.domain.entity.StudyCategory;
+import com.learningapp.base.domain.validator.StudyCategoryValidator;
 import com.learningapp.base.domain.valueobject.StudyCategoryId;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -9,18 +11,22 @@ import java.util.Objects;
 
 /**
  * StudyCategoryエンティティのファクトリクラス
- * Package-privateコンストラクタを直接呼び出し
+ * Validator Strategy Patternを使用
  */
 @Component
+@RequiredArgsConstructor
 public class StudyCategoryFactory {
+    
+    private final StudyCategoryValidator validator;
     
     /**
      * 新規カテゴリ作成
      */
     public StudyCategory createNewCategory(final String name, final String description, final int displayOrder) {
-        validateCreationInputs(name, description, displayOrder);
+        final String validatedName = validator.validateAndNormalizeName(name);
+        final int validatedDisplayOrder = validator.validateDisplayOrder(displayOrder);
         
-        return new StudyCategory(StudyCategoryId.generate(), name, description, displayOrder);  // 直接new
+        return new StudyCategory(StudyCategoryId.generate(), validatedName, description, validatedDisplayOrder);
     }
     
     /**
@@ -28,9 +34,12 @@ public class StudyCategoryFactory {
      */
     public StudyCategory restoreCategory(final StudyCategoryId id, final String name, 
                                         final String description, final int displayOrder) {
-        validateRestorationInputs(id, name, description, displayOrder);
+        Objects.requireNonNull(id, "StudyCategoryId must not be null");
         
-        return new StudyCategory(id, name, description, displayOrder);  // 直接new
+        final String validatedName = validator.validateAndNormalizeName(name);
+        final int validatedDisplayOrder = validator.validateDisplayOrder(displayOrder);
+        
+        return new StudyCategory(id, validatedName, description, validatedDisplayOrder);
     }
     
     /**
@@ -53,29 +62,19 @@ public class StudyCategoryFactory {
      * 試験分野のカテゴリ作成
      */
     public StudyCategory createExamCategory(final String examType, final String description, final int displayOrder) {
-        if (!examType.contains("午前") && !examType.contains("午後")) {
-            throw new IllegalArgumentException("試験分野は午前または午後を含む必要があります");
+        if (!validator.isValidExamCategoryName(examType)) {
+            throw new IllegalArgumentException("試験分野は午前、午後、実践、理論のいずれかを含む必要があります");
         }
         
         return createNewCategory(examType, description, displayOrder);
     }
     
-    private void validateCreationInputs(final String name, final String description, final int displayOrder) {
-        Objects.requireNonNull(name, "Category name must not be null");
-        
-        if (displayOrder < 0) {
-            throw new IllegalArgumentException("Display order must be non-negative");
-        }
-        
-        // 将来的なビジネスルール拡張ポイント
-        // - カテゴリ名の重複チェック
-        // - 表示順の重複チェック
-        // - カテゴリ階層構造の検証等
-    }
-    
-    private void validateRestorationInputs(final StudyCategoryId id, final String name, 
-                                          final String description, final int displayOrder) {
-        Objects.requireNonNull(id, "StudyCategoryId must not be null");
-        validateCreationInputs(name, description, displayOrder);
+    /**
+     * カスタムカテゴリ作成（ユーザー定義）
+     */
+    public StudyCategory createCustomCategory(final String name, final String description) {
+        // カスタムカテゴリは最後に配置
+        final int customDisplayOrder = 999;
+        return createNewCategory(name, description, customDisplayOrder);
     }
 }

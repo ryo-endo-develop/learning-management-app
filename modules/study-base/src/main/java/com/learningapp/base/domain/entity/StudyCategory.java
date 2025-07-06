@@ -9,6 +9,8 @@ import java.util.Objects;
 /**
  * 学習カテゴリエンティティ
  * 午前I、午前II、午後I、午後II等の学習分野
+ * 
+ * staticメソッドを完全削除、StudyCategoryValidatorに委譲
  */
 @Getter
 public final class StudyCategory implements EntityMarker<StudyCategoryId> {
@@ -19,15 +21,17 @@ public final class StudyCategory implements EntityMarker<StudyCategoryId> {
     private final int displayOrder;
     
     // Package-private：Factoryからのみアクセス可能
+    // バリデーションはFactoryで実施済み
     StudyCategory(final StudyCategoryId id, final String name, final String description, final int displayOrder) {
         this.entityBase = new EntityBase<>(id);
-        this.name = validateAndGetName(name);
+        this.name = Objects.requireNonNull(name, "Name must not be null");
         this.description = description != null ? description.trim() : "";
         this.displayOrder = Math.max(0, displayOrder);
     }
     
     /**
      * カテゴリ情報更新（新しいインスタンスを返す - 不変性）
+     * バリデーションは呼び出し側（Application Service）で実施
      */
     public StudyCategory updateCategory(final String newName, final String newDescription, final int newDisplayOrder) {
         final StudyCategory updatedCategory = new StudyCategory(this.getId(), newName, newDescription, newDisplayOrder);
@@ -65,6 +69,13 @@ public final class StudyCategory implements EntityMarker<StudyCategoryId> {
         return name.contains("実践") || name.contains("SQL") || name.contains("設計");
     }
     
+    /**
+     * 業務ロジック: 表示順の優先度チェック
+     */
+    public boolean isHighPriority() {
+        return displayOrder <= 5;
+    }
+    
     @Override
     public boolean equals(final Object obj) {
         if (this == obj) return true;
@@ -86,16 +97,5 @@ public final class StudyCategory implements EntityMarker<StudyCategoryId> {
                 ", description='" + description + '\'' +
                 ", displayOrder=" + displayOrder +
                 '}';
-    }
-    
-    private static String validateAndGetName(final String name) {
-        if (name == null || name.trim().isEmpty()) {
-            throw new IllegalArgumentException("カテゴリ名は必須です");
-        }
-        final String trimmedName = name.trim();
-        if (trimmedName.length() > 100) {
-            throw new IllegalArgumentException("カテゴリ名は100文字以内で入力してください");
-        }
-        return trimmedName;
     }
 }
