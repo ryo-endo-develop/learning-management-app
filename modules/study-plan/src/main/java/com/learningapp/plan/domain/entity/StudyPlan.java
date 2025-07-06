@@ -1,93 +1,176 @@
 package com.learningapp.plan.domain.entity;
 
-import com.learningapp.base.domain.entity.AggregateRoot;
+import com.learningapp.base.domain.entity.AggregateRootMarker;
+import com.learningapp.base.domain.entity.EntityBase;
 import com.learningapp.base.domain.enums.StudyPlanStatus;
 import com.learningapp.base.domain.valueobject.StudyPlanId;
 import com.learningapp.base.domain.valueobject.UserId;
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * 学習計画エンティティ
  * 集約ルート
+ * Effective Java Item 17,18: 不変性とコンポジション
+ * Effective Java Item 55: Optionalを適切に使用
  */
-@Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class StudyPlan extends AggregateRoot<StudyPlanId> {
+public final class StudyPlan implements AggregateRootMarker<StudyPlanId> {
     
-    private UserId userId;
-    private String title;
-    private String description;
-    private LocalDate startDate;
-    private LocalDate endDate;
-    private StudyPlanStatus status;
-    private Integer targetHoursPerDay;
+    private static final int MAX_TITLE_LENGTH = 200;
+    private static final int MIN_TARGET_HOURS = 1;
+    private static final int MAX_TARGET_HOURS = 24;
+    private static final int DEFAULT_TARGET_HOURS = 2;
     
-    public StudyPlan(StudyPlanId id, UserId userId, String title, String description, 
-                     LocalDate startDate, LocalDate endDate, Integer targetHoursPerDay) {
-        super(id);
-        this.userId = userId;
-        this.title = title;
-        this.description = description;
-        this.startDate = startDate;
-        this.endDate = endDate;
-        this.status = StudyPlanStatus.ACTIVE;
+    private final EntityBase<StudyPlanId> entityBase;
+    private final UserId userId;
+    private final String title;
+    private final String description;
+    private final LocalDate startDate;
+    private final LocalDate endDate;
+    private final StudyPlanStatus status;
+    private final int targetHoursPerDay;
+    
+    private StudyPlan(final StudyPlanId id, final UserId userId, final String title, 
+                     final String description, final LocalDate startDate, final LocalDate endDate, 
+                     final StudyPlanStatus status, final int targetHoursPerDay) {
+        this.entityBase = new EntityBase<>(id);
+        this.userId = Objects.requireNonNull(userId, "User ID must not be null");
+        this.title = validateAndGetTitle(title);
+        this.description = Optional.ofNullable(description).orElse("");
+        this.startDate = Objects.requireNonNull(startDate, "Start date must not be null");
+        this.endDate = Objects.requireNonNull(endDate, "End date must not be null");
+        this.status = Objects.requireNonNull(status, "Status must not be null");
         this.targetHoursPerDay = targetHoursPerDay;
+        
+        validateDateRange(startDate, endDate);
     }
     
-    public static StudyPlan create(UserId userId, String title, String description,
-                                   LocalDate startDate, LocalDate endDate, Integer targetHoursPerDay) {
-        validateInputs(title, startDate, endDate, targetHoursPerDay);
+    /**
+     * 新規学習計画作成
+     * targetHoursPerDay が null の場合はデフォルト値を使用
+     */
+    public static StudyPlan create(final UserId userId, final String title, final String description,
+                                   final LocalDate startDate, final LocalDate endDate, 
+                                   final Integer targetHoursPerDay) {
+        final int validatedTargetHours = Optional.ofNullable(targetHoursPerDay)
+            .map(StudyPlan::validateAndGetTargetHours)
+            .orElse(DEFAULT_TARGET_HOURS);
+            
         return new StudyPlan(StudyPlanId.generate(), userId, title, description, 
-                           startDate, endDate, targetHoursPerDay);
+                           startDate, endDate, StudyPlanStatus.ACTIVE, validatedTargetHours);
     }
     
-    public void updatePlan(String title, String description, LocalDate startDate, 
-                          LocalDate endDate, Integer targetHoursPerDay) {
-        validateInputs(title, startDate, endDate, targetHoursPerDay);
-        this.title = title;
-        this.description = description;
-        this.startDate = startDate;
-        this.endDate = endDate;
-        this.targetHoursPerDay = targetHoursPerDay;
-        updateTimestamp();
+    /**
+     * 既存学習計画復元（永続化層から）
+     */
+    public static StudyPlan restore(final StudyPlanId id, final UserId userId, final String title, 
+                                   final String description, final LocalDate startDate, final LocalDate endDate,
+                                   final StudyPlanStatus status, final Integer targetHoursPerDay) {
+        final int validatedTargetHours = Optional.ofNullable(targetHoursPerDay)
+            .map(StudyPlan::validateAndGetTargetHours)
+            .orElse(DEFAULT_TARGET_HOURS);
+            
+        return new StudyPlan(id, userId, title, description, startDate, endDate, status, validatedTargetHours);
     }
     
-    public void complete() {
+    /**
+     * 学習計画更新（新しいインスタンスを返す - 不変性）
+     */
+    public StudyPlan updatePlan(final String newTitle, final String newDescription, 
+                               final LocalDate newStartDate, final LocalDate newEndDate, 
+                               final Integer newTargetHoursPerDay) {
+        final int validatedTargetHours = Optional.ofNullable(newTargetHoursPerDay)
+            .map(StudyPlan::validateAndGetTargetHours)
+            .orElse(this.targetHoursPerDay);
+            
+        final StudyPlan updatedPlan = new StudyPlan(
+            this.getId(), this.userId, newTitle, newDescription, 
+            newStartDate, newEndDate, this.status, validatedTargetHours
+        );
+        updatedPlan.entityBase.updateTimestamp();
+        return updatedPlan;
+    }
+    
+    /**
+     * ステータス変更
+     */
+    public StudyPlan complete() {
         if (this.status == StudyPlanStatus.COMPLETED) {
             throw new IllegalStateException("学習計画は既に完了しています");
         }
-        this.status = StudyPlanStatus.COMPLETED;
-        updateTimestamp();
+        return changeStatus(StudyPlanStatus.COMPLETED);
     }
     
-    public void pause() {
+    public StudyPlan pause() {
         if (this.status != StudyPlanStatus.ACTIVE) {
             throw new IllegalStateException("実施中の学習計画のみ一時停止できます");
         }
-        this.status = StudyPlanStatus.PAUSED;
-        updateTimestamp();
+        return changeStatus(StudyPlanStatus.PAUSED);
     }
     
-    public void resume() {
+    public StudyPlan resume() {
         if (this.status != StudyPlanStatus.PAUSED) {
             throw new IllegalStateException("一時停止中の学習計画のみ再開できます");
         }
-        this.status = StudyPlanStatus.ACTIVE;
-        updateTimestamp();
+        return changeStatus(StudyPlanStatus.ACTIVE);
     }
     
-    public void cancel() {
+    public StudyPlan cancel() {
         if (this.status == StudyPlanStatus.COMPLETED) {
             throw new IllegalStateException("完了した学習計画はキャンセルできません");
         }
-        this.status = StudyPlanStatus.CANCELLED;
-        updateTimestamp();
+        return changeStatus(StudyPlanStatus.CANCELLED);
     }
     
+    // Getters
+    public UserId getUserId() {
+        return userId;
+    }
+    
+    public String getTitle() {
+        return title;
+    }
+    
+    public String getDescription() {
+        return description;
+    }
+    
+    public LocalDate getStartDate() {
+        return startDate;
+    }
+    
+    public LocalDate getEndDate() {
+        return endDate;
+    }
+    
+    public StudyPlanStatus getStatus() {
+        return status;
+    }
+    
+    public int getTargetHoursPerDay() {
+        return targetHoursPerDay;
+    }
+    
+    // EntityMarkerの実装
+    @Override
+    public StudyPlanId getId() {
+        return entityBase.getId();
+    }
+    
+    @Override
+    public LocalDateTime getCreatedAt() {
+        return entityBase.getCreatedAt();
+    }
+    
+    @Override
+    public LocalDateTime getUpdatedAt() {
+        return entityBase.getUpdatedAt();
+    }
+    
+    // 業務ロジック
     public boolean isActive() {
         return this.status == StudyPlanStatus.ACTIVE;
     }
@@ -96,24 +179,86 @@ public class StudyPlan extends AggregateRoot<StudyPlanId> {
         return java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate) + 1;
     }
     
-    private static void validateInputs(String title, LocalDate startDate, LocalDate endDate, Integer targetHoursPerDay) {
+    public boolean isOverdue() {
+        return LocalDate.now().isAfter(endDate) && status == StudyPlanStatus.ACTIVE;
+    }
+    
+    public long getRemainingDays() {
+        return java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), endDate);
+    }
+    
+    /**
+     * 完了期限まで1週間以内かどうか
+     */
+    public boolean isNearDeadline() {
+        return getRemainingDays() <= 7 && getRemainingDays() >= 0;
+    }
+    
+    /**
+     * 総目標学習時間
+     */
+    public long getTotalTargetHours() {
+        return getDurationDays() * targetHoursPerDay;
+    }
+    
+    @Override
+    public boolean equals(final Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        final StudyPlan studyPlan = (StudyPlan) obj;
+        return Objects.equals(entityBase.getId(), studyPlan.entityBase.getId());
+    }
+    
+    @Override
+    public int hashCode() {
+        return Objects.hash(entityBase.getId());
+    }
+    
+    @Override
+    public String toString() {
+        return "StudyPlan{" +
+                "id=" + getId() +
+                ", userId=" + userId +
+                ", title='" + title + '\'' +
+                ", startDate=" + startDate +
+                ", endDate=" + endDate +
+                ", status=" + status +
+                ", targetHoursPerDay=" + targetHoursPerDay +
+                '}';
+    }
+    
+    private StudyPlan changeStatus(final StudyPlanStatus newStatus) {
+        final StudyPlan updatedPlan = new StudyPlan(
+            this.getId(), this.userId, this.title, this.description,
+            this.startDate, this.endDate, newStatus, this.targetHoursPerDay
+        );
+        updatedPlan.entityBase.updateTimestamp();
+        return updatedPlan;
+    }
+    
+    private static String validateAndGetTitle(final String title) {
         if (title == null || title.trim().isEmpty()) {
             throw new IllegalArgumentException("学習計画のタイトルは必須です");
         }
-        if (title.length() > 200) {
-            throw new IllegalArgumentException("タイトルは200文字以内で入力してください");
+        final String trimmedTitle = title.trim();
+        if (trimmedTitle.length() > MAX_TITLE_LENGTH) {
+            throw new IllegalArgumentException("タイトルは" + MAX_TITLE_LENGTH + "文字以内で入力してください");
         }
-        if (startDate == null) {
-            throw new IllegalArgumentException("開始日は必須です");
+        return trimmedTitle;
+    }
+    
+    private static int validateAndGetTargetHours(final int targetHoursPerDay) {
+        if (targetHoursPerDay < MIN_TARGET_HOURS || targetHoursPerDay > MAX_TARGET_HOURS) {
+            throw new IllegalArgumentException(
+                String.format("1日の目標学習時間は%d-%d時間の範囲で設定してください", MIN_TARGET_HOURS, MAX_TARGET_HOURS)
+            );
         }
-        if (endDate == null) {
-            throw new IllegalArgumentException("終了日は必須です");
-        }
+        return targetHoursPerDay;
+    }
+    
+    private static void validateDateRange(final LocalDate startDate, final LocalDate endDate) {
         if (startDate.isAfter(endDate)) {
             throw new IllegalArgumentException("開始日は終了日より前である必要があります");
-        }
-        if (targetHoursPerDay != null && (targetHoursPerDay < 1 || targetHoursPerDay > 24)) {
-            throw new IllegalArgumentException("1日の目標学習時間は1-24時間の範囲で設定してください");
         }
     }
 }
